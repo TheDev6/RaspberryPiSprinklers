@@ -1,0 +1,142 @@
+﻿@model Jobz.WebUi.Sprinkler_Api.Models.RainDelay
+@{
+    ViewBag.Title = "RainDelay";
+}
+
+<h2>RainDelay</h2>
+<div style="margin-top: 10px; height: 250px" id="openweathermap-widget-5"></div>
+<div class="container" id="app">
+    <div style="margin-top: 10px;" class="alert alert-danger" v-if="validationMessages.length > 0">
+        <ul>
+            <li v-for="m in validationMessages">{{m}}</li>
+        </ul>
+    </div>
+    <div>
+
+        <h4>Current Rain Delay Status: {{rainDelayMessage}}</h4>
+        <div v-if="isRainDelayOn">
+            <button class="btn btn-warning"
+                    type="button"
+                    v-on:click="cancelRainDelay()">
+                Cancel Rain Delay
+            </button>
+        </div>
+        <div v-if="!isRainDelayOn" style="padding-bottom: 10px" v-for="i in dayNums">
+            <button class="btn btn-success"
+                    type="button"
+                    v-on:click="addRainDelay(i)">
+                Delay {{i}} Day
+            </button>
+        </div>
+    </div>
+
+</div>
+
+@Scripts.Render("~/bundles/moment")
+<script>
+    $(function() {
+        var model = @Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(Model)); ;
+
+        var dayNums = function(){
+            var result = [];
+            for (var i = 1; i <= 14; i++) {
+                result.push(i);
+            }
+            return result;
+        };
+
+        var rainDelayMessage = function() {
+            var result = '';
+            if (model
+                && model.RainDelayExpireDate) {
+                result = 'On until ' +
+                    moment(model.RainDelayExpireDate).format('dddd, MMMM Do YYYY, h:mm:ss a');
+            } else {
+                result = 'Off';
+            }
+
+            return result;
+        };
+
+        var isRainDelayOn = function() {
+            if (model
+                && model.RainDelayExpireDate) {
+                return true;
+            }
+            return false;
+        };
+
+        var app = new Vue({
+            el: "#app",
+            data: {
+                isWaiting: false,
+                validationMessages: [],
+                dayNums: dayNums(),
+                rainDelayMessage: rainDelayMessage(),
+                isRainDelayOn: isRainDelayOn(),
+                item: model
+            },
+            methods: {
+                cancelRainDelay : function () {
+                    this.delete(model.RainDelayUid);
+                },
+                addRainDelay: function(days) {
+                    var RainDelayExpireDate = moment().add(days, 'days').format();//8601
+                    this.post(RainDelayExpireDate);
+                },
+                post: function(RainDelayExpireDate) {
+                    var vm = this;
+                    $.ajax({
+                        type:'Post',
+                        url:  '/Home/RainDelayPost',
+                        data: {
+                            RainDelayExpireDateTime:RainDelayExpireDate
+                        }
+                    }).done(function (result) {
+                        if (result.ValidationResult.IsValid === true) {
+                            window.location = window.location;
+                        } else {
+                            vm.handleFail(result);
+                        }
+                    }).fail(function (jqXHR, textStatus, errorThrown) {
+                        alert(textStatus);
+                        console.log([jqXHR, textStatus, errorThrown]);
+                    }).always(function (result) {
+                        vm.isWaiting = false;
+                    });
+                },
+                delete: function(rainDelayUid) {
+                    var vm = this;
+                    $.ajax({
+                        type:'Post',
+                        url:  '/Home/RainDelayDelete?rainDelayUid=' + rainDelayUid,
+                        data: null
+                    }).done(function (result) {
+                        if (result.ValidationResult.IsValid === true) {
+                            window.location = window.location;
+                        } else {
+                            vm.handleFail(result);
+                        }
+                    }).fail(function (jqXHR, textStatus, errorThrown) {
+                        alert(textStatus);
+                        console.log([jqXHR, textStatus, errorThrown]);
+                    }).always(function (result) {
+                        vm.isWaiting = false;
+                    });
+                },
+                handleFail: function (data) {
+                    for (var i = 0; i < data.ValidationResult.ValidationFailures.length; i++) {
+                        this.validationMessages.push(data.ValidationResult.ValidationFailures[i].Message)
+                    }
+                    if (data.Exception) {
+                        console.log(data.Exception);
+                    }
+                }
+            }
+        });
+    });
+</script>
+
+<script>window.myWidgetParam ? window.myWidgetParam : window.myWidgetParam = []; window.myWidgetParam.push({ id: 5, cityid: '5304391', appid: 'b4ff1076b254e8399c7f0491c0084a60', units: 'imperial', containerid: 'openweathermap-widget-5', }); (function () { var script = document.createElement('script'); script.async = true; script.charset = "utf-8"; script.src = "//openweathermap.org/themes/openweathermap/assets/vendor/owm/js/weather-widget-generator.js"; var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(script, s); })();</script>
+
+

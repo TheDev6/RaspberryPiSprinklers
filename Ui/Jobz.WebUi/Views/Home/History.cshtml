@@ -1,0 +1,161 @@
+﻿@model IEnumerable<Jobz.WebUi.Sprinkler_Api.Models.WaterEventHistory>
+
+@{
+    ViewBag.Title = "History";
+}
+
+<h2>History</h2>
+<div class="container" id="app">
+    <div style="margin-top: 10px;" class="alert alert-danger" v-if="validationMessages.length > 0">
+        <ul>
+            <li v-for="m in validationMessages">{{m}}</li>
+        </ul>
+    </div>
+    <div>
+        <div class="form-group">
+            <label>Start Date:</label>
+            <br />
+            <datepicker type='text'
+                        class="input-group datepicker"
+                        v-model="start"></datepicker>
+        </div>
+        <div class="form-group">
+            <label>End Date:</label>
+            <br />
+            <datepicker type='text'
+                        class="input-group datepicker"
+                        v-model="end"></datepicker>
+        </div>
+        <button class="btn btn-default" v-on:click="getNewItems()">
+            Load Date Range
+            <i v-show="isWaiting"
+               class="fa fa-cog fa-spin fa-fw margin-bottom">
+            </i>
+        </button>
+        <br />
+        <table class="table table-striped table-bordered table-hover table-responsive">
+            <tr>
+                <th style="cursor: pointer" v-on:click="mySort('ZoneName')">Zone</th>
+                <th style="cursor: pointer" v-on:click="mySort('Message')">Message</th>
+                <th style="cursor: pointer" v-on:click="mySort('Start')">Start</th>
+                <th style="cursor: pointer" v-on:click="mySort('End')">End</th>
+                <th style="cursor: pointer" v-on:click="mySort('Duration')">Duration</th>
+                <th><i v-show="isWaiting" class="fa fa-cog fa-spin fa-fw margin-bottom"></i></th>
+            </tr>
+            <tr v-for="i in items">
+                <td>{{i.ZoneName}}</td>
+                <td>{{i.Message}}</td>
+                <td>{{i.Start | dateGrid}}</td>
+                <td>{{i.End | dateGrid}}</td>
+                <td>{{i.DurationDisplay}}</td>
+                <td v-on:click="deleteRow(i.WaterEventHistoryUid)"
+                    style="cursor: pointer; text-decoration: underline;">
+                    <span v-show="!isWaiting">delete</span>
+                    <i v-show="isWaiting" class="fa fa-cog fa-spin fa-fw margin-bottom"></i>
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>
+@Scripts.Render("~/bundles/JLinq")
+@Scripts.Render("~/bundles/moment")
+<script>
+    $(function() {
+        var histories = JSON.parse('@Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(Model))');
+        var so = new SortOption(function (item) { return item.Start; },false);
+        histories = new JLinq(histories).orderBySortOptions(so).items;
+
+        var dateFormatPicker = 'MM/DD/YYYY';
+        Vue.filter('date',
+            function(inputDate) {
+                return moment(inputDate).format(dateFormatPicker);
+            });
+
+        Vue.filter('dateGrid',
+            function(inputDate) {
+                if (inputDate) {
+                    return moment(inputDate).format('MMM-D-Y_HH:mm:ss');
+                }
+                return inputDate;
+            });
+
+        var app = new Vue({
+            el: "#app",
+            data: {
+                items: histories,
+                start: moment().add(-14, 'days').format(dateFormatPicker),
+                end: moment().format(dateFormatPicker),
+                isWaiting: false,
+                validationMessages: [],
+                sort: {
+                    SortProp: function (item) { return item.Start; }, IsAsc: false }
+            },
+            components: {
+                "datepicker": VueStrap.datepicker
+            },
+            methods: {
+                mySort: function(sortProp) {
+                    var isAsc = (this.sort.SortProp !== sortProp) ||
+                        (this.sort.SortProp === sortProp && this.sort.IsAsc === false);
+                    this.sort.SortProp = sortProp;
+                    this.sort.IsAsc = isAsc;
+                    var sortOption = new SortOption(function(item) { return item[sortProp]; }, isAsc);
+                    var sorted = new JLinq(this.items).orderBySortOptions([sortOption]).items;
+                    this.items = sorted;
+                },
+                getNewItems: function() {
+                    this.isWaiting = true;
+                    this.validationMessages = [];
+                    var vm = this;
+                    var url = '/Home/HistoryByDate?start=' + moment(vm.start).format() + '&end=' + moment(vm.end).format();
+                    $.ajax({
+                        type:'GET',
+                        url:  url,
+                        data: null
+                    }).done(function (result) {
+                        if (result.ValidationResult.IsValid === true) {
+                            var so = new SortOption(function (item) { return item.Start; },false);
+                            vm.items = new JLinq(result.Payload).orderBySortOptions(so).items;
+                        } else {
+                            vm.handleFail(result);
+                        }
+                    }).fail(function (jqXHR, textStatus, errorThrown) {
+                        alert(textStatus);
+                        console.log([jqXHR, textStatus, errorThrown]);
+                    }).always(function (result) {
+                        vm.isWaiting = false;
+                    });
+                },
+                deleteRow: function(waterEventHistoryUid) {
+                    this.isWaiting = true;
+                    this.validationMessages = [];
+                    var vm = this;
+                    $.ajax({
+                        type:'POST',
+                        url:  '/Home/HistoryDelete?waterEventHistoryUid=' + waterEventHistoryUid,
+                        data: null
+                    }).done(function (result) {
+                        if (result.ValidationResult.IsValid === true) {
+                            window.location = window.location;
+                        } else {
+                            vm.handleFail(result);
+                        }
+                    }).fail(function (jqXHR, textStatus, errorThrown) {
+                        alert(textStatus);
+                        console.log([jqXHR, textStatus, errorThrown]);
+                    }).always(function (result) {
+                        vm.isWaiting = false;
+                    });
+                },
+                handleFail: function (data) {
+                    for (var i = 0; i < data.ValidationResult.ValidationFailures.length; i++) {
+                        this.validationMessages.push(data.ValidationResult.ValidationFailures[i].Message);
+                    }
+                    if (data.Exception) {
+                        console.log(data.Exception);
+                    }
+                }
+            }
+        });
+    });
+</script>

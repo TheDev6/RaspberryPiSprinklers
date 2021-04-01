@@ -1,0 +1,302 @@
+﻿@model Jobz.WebUi.Models.ScheduleViewModel
+
+@{
+    ViewBag.Title = "title";
+}
+<div class="container" id="app">
+    <h2>Sprinkler Schedule</h2>
+
+    <div style="margin-top: 10px;" class="alert alert-danger" v-if="validationMessages.length > 0">
+        <ul>
+            <li v-for="m in validationMessages">{{m}}</li>
+        </ul>
+    </div>
+    <div v-if="!isNew && !isEdit">
+        <span class="btn btn-default" v-on:click="newItem">New Water Event</span>
+        <br />
+        <table class="table table-striped table-bordered table-hover table-responsive">
+            <tr>
+                <th></th>
+                <th style="cursor: pointer" v-on:click="mySort('ZoneName')">Zone</th>
+                <th style="cursor: pointer" v-on:click="mySort('DayOfWeek')">Day</th>
+                <th style="cursor: pointer" v-on:click="mySort('StartSpan')">Start</th>
+                <th style="cursor: pointer" v-on:click="mySort('EndSpan')">End</th>
+                <th style="cursor: pointer" v-on:click="mySort('DurationSpan')">Duration</th>
+                <th><i v-show="isWaiting" class="fa fa-cog fa-spin fa-fw margin-bottom"></i></th>
+            </tr>
+            <tr v-for="i in items">
+                <td v-on:click="editItem(i)"
+                    style="cursor: pointer; text-decoration: underline;">
+                    <span v-show="!isWaiting">edit</span>
+                    <i v-show="isWaiting" class="fa fa-cog fa-spin fa-fw margin-bottom"></i>
+                </td>
+                <td>{{i.ZoneName}}</td>
+                <td>{{i.DayOfWeek}}</td>
+                <td>{{i.StartSpan}}</td>
+                <td>{{i.EndSpan}}</td>
+                <td>{{i.DurationSpan}}</td>
+                <td v-on:click="deleteRow(i.WeeklyWaterEventUid)"
+                    style="cursor: pointer; text-decoration: underline;">
+                    <span v-show="!isWaiting">delete</span>
+                    <i v-show="isWaiting" class="fa fa-cog fa-spin fa-fw margin-bottom"></i>
+                </td>
+            </tr>
+        </table>
+    </div>
+    <div id="add-edit" v-if="isNew || isEdit">
+        <div class="form-group">
+            <label>
+                ZoneName:
+            </label>
+            <select class="form-control"
+                    v-model="item.ZoneName">
+                <option v-for="z in zones"
+                        v-bind:value="z">
+                    {{z}}
+                </option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>
+                Day of Week:
+            </label>
+            <select class="form-control"
+                    v-model="item.DayOfWeek">
+                <option v-for="d in daysOfWeek"
+                        v-bind:value="d">
+                    {{d}}
+                </option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>
+                Start Hour:
+            </label>
+            <select class="form-control"
+                    v-model="item.StartHour">
+                <option v-for="h in hours"
+                        v-bind:value="h">
+                    {{h}}
+                </option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>
+                Start Minute:
+            </label>
+            <select class="form-control"
+                    v-model="item.StartMinute">
+                <option v-for="m in minutesSeconds"
+                        v-bind:value="m">
+                    {{m}}
+                </option>
+            </select>
+
+        </div>
+        <div class="form-group">
+            <label>
+                Start Second:
+            </label>
+            <select class="form-control"
+                    v-model="item.StartSecond">
+                <option v-for="s in minutesSeconds"
+                        v-bind:value="s">
+                    {{s}}
+                </option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>
+                Duration Minutes:
+            </label>
+            <input type="number"
+                   class="form-control"
+                   v-model="item.DurationMinutes" />
+        </div>
+        <div class="form-group">
+            <label>
+                Duration Seconds:
+            </label>
+            <select class="form-control"
+                    v-model="item.DurationSeconds">
+                <option v-for="s in minutesSeconds"
+                        v-bind:value="s">
+                    {{s}}
+                </option>
+            </select>
+        </div>
+        <button class="btn btn-primary" v-on:click="submit" v-bind:disabled="isWaiting">Submit</button>
+        <button class="btn" v-on:click="cancel" v-bind:disabled="isWaiting">Cancel</button>
+        <br />
+        <i v-show="isWaiting" class="fa fa-cog fa-spin fa-3x fa-fw margin-bottom"></i>
+        <br />
+    </div>
+</div>
+@Scripts.Render("~/bundles/JLinq")
+@Scripts.Render("~/bundles/moment")
+<script>
+    $(function() {
+        var waterEventsFromServer =
+            JSON.parse('@Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(Model.WaterEventItems))');
+        var blankItem = function() {
+            return {
+                WeeklyWaterEventUid:'',
+                ZoneId:'',
+                DayOfWeek: '',
+                StartHour: '',
+                StartMinute: '',
+                StartSecond: '',
+                DurationMinutes: '',
+                DurationSeconds: ''
+            };
+        };
+        var minSecs = function() {
+            var result = [];
+            for (var i = 0; i < 60; i++) {
+                result.push(i);
+            }
+            return result;
+        };
+        var hours = function() {
+            var result = [];
+            for (var i = 0; i < 24; i++) {
+                result.push(i);
+            }
+            return result;
+        };
+        var app = new Vue({
+            el: "#app",
+            data: {
+                isNew: false,
+                isEdit: false,
+                item: blankItem(),
+                items: waterEventsFromServer,
+                isWaiting: false,
+                validationMessages: [],
+                sort: { SortProp: null, IsAsc: false },
+                minutesSeconds: minSecs(),
+                hours: hours(),
+                daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+                zones: ['NorthGrass', 'SouthGrass', 'Trees', 'Bushes']
+            },
+            methods: {
+                newItem: function() {
+                    this.isNew = true;
+                    this.item = blankItem();
+                    this.validationMessages = [];
+                },
+                editItem: function(item) {
+                    this.validationMessages = [];
+                    this.isEdit = true;
+                    this.isNew = false;
+                    this.item = this.toUpdateModel(item);
+                },
+                toUpdateModel(item) {
+                    var mi = blankItem();
+                    mi.WeeklyWaterEventUid = item.WeeklyWaterEventUid;
+                    mi.ZoneName = item.ZoneName;
+                    mi.DayOfWeek = item.DayOfWeek;
+                    mi.StartHour = item.StartHour;
+                    mi.StartMinute = item.StartMinute;
+                    mi.StartSecond = item.StartSecond;
+                    mi.DurationMinutes = item.DurationMinutes;
+                    mi.DurationSeconds = item.DurationSeconds;
+                    return mi;
+                },
+                mySort: function(sortProp) {
+                    var isAsc = (this.sort.SortProp !== sortProp) ||
+                        (this.sort.SortProp === sortProp && this.sort.IsAsc === false);
+                    this.sort.SortProp = sortProp;
+                    this.sort.IsAsc = isAsc;
+                    var sortOption = new SortOption(function(item) { return item[sortProp]; }, isAsc);
+                    var sorted = new JLinq(this.items).orderBySortOptions([sortOption]).items;
+                    this.items = sorted;
+                },
+                cancel: function() {
+                    this.validationMessages = [];
+                    this.isNew = false;
+                    this.isEdit = false;
+                    this.item = blankItem();
+                },
+                submit: function() {
+                    this.isWaiting = true;
+                    if (this.isNew === true) {
+                        this.postNewItem(this.item);
+                    }
+                    else if (this.isEdit) {
+                        this.updateItem(this.item);
+                    }
+                },
+                deleteRow: function(uid) {
+                    $.ajax({
+                        type:'POST',
+                        url:  '/Home/DeleteWaterEvent?weeklyWaterEventUid=' + uid,
+                        data:null
+                    }).done(function (result) {
+                        if (result.ValidationResult.IsValid === true) {
+                            this.items = [];
+                            window.location = window.location;
+                        } else {
+                            vm.handleFail(result);
+                        }
+                    }).fail(function (jqXHR, textStatus, errorThrown) {
+                        alert(textStatus);
+                        console.log([jqXHR, textStatus, errorThrown]);
+                    }).always(function (result) {
+                        vm.isWaiting = false;
+                    });
+                },
+                updateItem: function(item) {
+                    this.validationMessages = [];
+                    var vm = this;
+                    $.ajax({
+                        type:'POST',
+                        url:  '/Home/UpdateWaterEvent',
+                        data: item
+                    }).done(function (result) {
+                        if (result.ValidationResult.IsValid === true) {
+                            this.items = [];
+                            window.location = window.location;
+                        } else {
+                            vm.handleFail(result);
+                        }
+                    }).fail(function (jqXHR, textStatus, errorThrown) {
+                        alert(textStatus);
+                        console.log([jqXHR, textStatus, errorThrown]);
+                    }).always(function (result) {
+                        vm.isWaiting = false;
+                    });
+                },
+                postNewItem: function(item) {
+                    this.validationMessages = [];
+                    var vm = this;
+                    $.ajax({
+                        type:'POST',
+                        url:  '/Home/CreateWaterEvent',
+                        data: item
+                    }).done(function (result) {
+                        if (result.ValidationResult.IsValid === true) {
+                            this.items = [];
+                            window.location = window.location;
+                        } else {
+                            vm.handleFail(result);
+                        }
+                    }).fail(function (jqXHR, textStatus, errorThrown) {
+                        alert(textStatus);
+                        console.log([jqXHR, textStatus, errorThrown]);
+                    }).always(function (result) {
+                        vm.isWaiting = false;
+                    });
+                },
+                handleFail: function (data) {
+                    for (var i = 0; i < data.ValidationResult.ValidationFailures.length; i++) {
+                        this.validationMessages.push(data.ValidationResult.ValidationFailures[i].Message)
+                    }
+                    if (data.Exception) {
+                        console.log(data.Exception);
+                    }
+                }
+            }
+        });
+    });
+</script>

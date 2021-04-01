@@ -1,0 +1,11 @@
+﻿@{
+    ViewBag.Title = "Home Page";
+}
+
+<div class="jumbotron">
+    <h1>Sprinkers</h1>
+    <p class="lead">Sprinklerzez</p>
+    <p>
+        @Html.ActionLink(linkText: "Manage Schedule", controllerName: "Home", actionName: "Schedule", routeValues: new { area = "" }, htmlAttributes: new { @class = "btn btn-primary btn-lg" })
+    </p>
+</div>
